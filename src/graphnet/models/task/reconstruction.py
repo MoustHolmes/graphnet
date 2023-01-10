@@ -193,3 +193,13 @@ class InelasticityReconstruction(Task):
     def _forward(self, x):
         # Transform output to unit range
         return torch.sigmoid(x)
+
+class EnergyEnergy_trackCombined(Task):
+    """Combined energy and and the fraction energy_track/energy in a range (1,0) """
+
+    # 2 features energy and energy_track outputed in the range 0,1 
+    nb_inputs = 2
+
+    def _forward(self, x):
+        # Transform output to unit range
+        return torch.sigmoid(x)*0.9999

@@ -36,9 +36,9 @@ class TRUTH:
         "elasticity",
         "sim_type",
         "interaction_type",
-        "interaction_time",  # Added for vertex reconstruction
+        #"interaction_time",  # Added for vertex reconstruction
         "inelasticity",
         "stopped_muon",
     ]
     DEEPCORE = ICECUBE86
-    UPGRADE = DEEPCORE
+    UPGRADE = DEEPCORE #+ ["QuantileTransformedEnergy","energy_track_frac"]

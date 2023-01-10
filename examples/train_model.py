@@ -59,12 +59,12 @@ def main():
         "batch_size": 512,
         "num_workers": 10,
         "accelerator": "gpu",
-        "devices": [0],
+        "devices": [1],
         "target": "energy",
-        "n_epochs": 5,
+        "n_epochs": 1,
         "patience": 5,
     }
-    archive = "/groups/icecube/asogaard/gnn/results/"
+    archive = "/groups/icecube/moust/storage/train_model"
     run_name = "dynedge_{}_example".format(config["target"])
 
     # Log configuration to W&B
