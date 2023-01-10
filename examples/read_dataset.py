@@ -1,14 +1,17 @@
-import sqlite3
-import time
+"""Example of reading events from Dataset class."""
+
+from timer import timer
 
 import awkward
-from timer import timer
+import sqlite3
+import time
 import torch.multiprocessing
 import torch.utils.data
 from torch_geometric.data.batch import Batch
 from tqdm import tqdm
 
 from graphnet.data.constants import FEATURES, TRUTH
+from graphnet.data.dataset import Dataset
 from graphnet.data.sqlite.sqlite_dataset import SQLiteDataset
 from graphnet.data.parquet.parquet_dataset import ParquetDataset
 from graphnet.utilities.logging import get_logger
@@ -37,7 +40,7 @@ features = [  # From I3GenericExtractor
 truth = TRUTH.UPGRADE
 
 
-def main(backend: str):
+def main(backend: str) -> None:
     """Read intermediate file using `Dataset` class."""
     # Check(s)
     assert backend in DATASET_CLASS
@@ -78,10 +81,12 @@ def main(backend: str):
         truth,
         truth_table=truth_table,
     )
+    assert isinstance(dataset, Dataset)
 
     logger.info(dataset[1])
     logger.info(dataset[1].x)
     if backend == "sqlite":
+        assert isinstance(dataset, SQLiteDataset)
         dataset._close_connection()  # This is necessary iff `dataset` has been indexed between instantiation and passing to `DataLoader`
 
     dataloader = torch.utils.data.DataLoader(
@@ -105,5 +110,5 @@ def main(backend: str):
 
 if __name__ == "__main__":
     backend = "parquet"
-    # backend = "sqlite"
+    backend = "sqlite"
     main(backend)

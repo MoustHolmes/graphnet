@@ -1,37 +1,19 @@
+"""Simplified example of training Model."""
+
 import os
 
-from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
-import torch
-from torch.optim.adam import Adam
+from pytorch_lightning.utilities import rank_zero_only
 
-from graphnet.training.loss_functions import LogCoshLoss
-from graphnet.data.constants import FEATURES, TRUTH
-from graphnet.data.sqlite.sqlite_selection import (
-    get_equal_proportion_neutrino_indices,
+from graphnet.data.dataloader import DataLoader
+from graphnet.models import Model
+from graphnet.training.callbacks import ProgressBar
+from graphnet.utilities.config import (
+    DatasetConfig,
+    ModelConfig,
+    TrainingConfig,
 )
-from graphnet.models import StandardModel
-from graphnet.models.detector.icecube import IceCubeDeepCore
-from graphnet.models.gnn import DynEdge
-from graphnet.models.graph_builders import KNNGraphBuilder
-from graphnet.models.task.reconstruction import EnergyReconstruction
-from graphnet.training.callbacks import ProgressBar, PiecewiseLinearLR
-from graphnet.training.utils import (
-    get_predictions,
-    make_train_validation_dataloader,
-    save_results,
-)
-from graphnet.utilities.logging import get_logger
-
-logger = get_logger()
-
-# Configurations
-torch.multiprocessing.set_sharing_strategy("file_system")
-
-# Constants
-features = FEATURES.DEEPCORE
-truth = TRUTH.DEEPCORE[:-1]
 
 # Make sure W&B output directory exists
 WANDB_DIR = "./wandb/"
@@ -46,117 +28,79 @@ wandb_logger = WandbLogger(
 )
 
 
-# Main function definition
-def main():
-
-    logger.info(f"features: {features}")
-    logger.info(f"truth: {truth}")
-
+def main() -> None:
+    """Run example."""
     # Configuration
-    config = {
-        "db": "/groups/icecube/asogaard/data/sqlite/dev_lvl7_robustness_muon_neutrino_0000/data/dev_lvl7_robustness_muon_neutrino_0000.db",
-        "pulsemap": "SRTTWOfflinePulsesDC",
-        "batch_size": 512,
-        "num_workers": 10,
-        "accelerator": "gpu",
-        "devices": [1],
-        "target": "energy",
-        "n_epochs": 1,
-        "patience": 5,
-    }
-    archive = "/groups/icecube/moust/storage/train_model"
-    run_name = "dynedge_{}_example".format(config["target"])
-
-    # Log configuration to W&B
-    wandb_logger.experiment.config.update(config)
-
-    # Common variables
-    train_selection, _ = get_equal_proportion_neutrino_indices(config["db"])
-    train_selection = train_selection[0:50000]
-
-    (
-        training_dataloader,
-        validation_dataloader,
-    ) = make_train_validation_dataloader(
-        config["db"],
-        train_selection,
-        config["pulsemap"],
-        features,
-        truth,
-        batch_size=config["batch_size"],
-        num_workers=config["num_workers"],
+    config = TrainingConfig(
+        target="energy",
+        early_stopping_patience=5,
+        fit={"gpus": [0, 1], "max_epochs": 5},
+        dataloader={"batch_size": 128, "num_workers": 10},
     )
 
-    # Building model
-    detector = IceCubeDeepCore(
-        graph_builder=KNNGraphBuilder(nb_nearest_neighbours=8),
+    archive = "/groups/icecube/asogaard/gnn/results/"
+    run_name = "dynedge_{}_example".format(config.target)
+
+    # Construct dataloaders
+    dataset_config = DatasetConfig.load(
+        "configs/datasets/dev_lvl7_robustness_muon_neutrino_0000.yml"
     )
-    gnn = DynEdge(
-        nb_inputs=detector.nb_outputs,
-        global_pooling_schemes=["min", "max", "mean", "sum"],
-    )
-    task = EnergyReconstruction(
-        hidden_size=gnn.nb_outputs,
-        target_labels=config["target"],
-        loss_function=LogCoshLoss(),
-        transform_prediction_and_target=torch.log10,
-    )
-    model = StandardModel(
-        detector=detector,
-        gnn=gnn,
-        tasks=[task],
-        optimizer_class=Adam,
-        optimizer_kwargs={"lr": 1e-03, "eps": 1e-03},
-        scheduler_class=PiecewiseLinearLR,
-        scheduler_kwargs={
-            "milestones": [
-                0,
-                len(training_dataloader) / 2,
-                len(training_dataloader) * config["n_epochs"],
-            ],
-            "factors": [1e-2, 1, 1e-02],
-        },
-        scheduler_config={
-            "interval": "step",
-        },
+    dataloaders = DataLoader.from_dataset_config(
+        dataset_config,
+        **config.dataloader,
     )
 
-    # Training model
+    # Build model
+    model_config = ModelConfig.load(f"configs/models/{run_name}.yml")
+    model = Model.from_config(model_config, trust=True)
+
+    # Log configurations to W&B
+    # NB: Only log to W&B on the rank-zero process in case of multi-GPU
+    #     training.
+    if rank_zero_only == 0:
+        wandb_logger.experiment.config.update(config)
+        wandb_logger.experiment.config.update(model_config.as_dict())
+        wandb_logger.experiment.config.update(dataset_config.as_dict())
+
+    # Train model
     callbacks = [
         EarlyStopping(
             monitor="val_loss",
-            patience=config["patience"],
+            patience=config.early_stopping_patience,
         ),
         ProgressBar(),
     ]
 
-    trainer = Trainer(
-        accelerator=config["accelerator"],
-        devices=config["devices"],
-        max_epochs=config["n_epochs"],
+    model.fit(
+        dataloaders["train"],
+        dataloaders["validation"],
         callbacks=callbacks,
-        log_every_n_steps=1,
         logger=wandb_logger,
+        **config.fit,
     )
 
-    try:
-        trainer.fit(model, training_dataloader, validation_dataloader)
-    except KeyboardInterrupt:
-        logger.warning("[ctrl+c] Exiting gracefully.")
-        pass
+    # Get predictions
+    if isinstance(config.target, str):
+        prediction_columns = [config.target + "_pred"]
+        additional_attributes = [config.target]
+    else:
+        prediction_columns = [target + "_pred" for target in config.target]
+        additional_attributes = config.target
 
-    # Saving predictions to file
-    results = get_predictions(
-        trainer,
-        model,
-        validation_dataloader,
-        [config["target"] + "_pred"],
-        additional_attributes=[config["target"], "event_no"],
+    results = model.predict_as_dataframe(
+        dataloaders["test"],
+        prediction_columns=prediction_columns,
+        additional_attributes=additional_attributes + ["event_no"],
     )
 
-    save_results(config["db"], run_name, results, archive, model)
+    # Save predictions and model to file
+    db_name = dataset_config.path.split("/")[-1].split(".")[0]
+    path = os.path.join(archive, db_name, run_name)
+
+    results.to_csv(f"{path}/results.csv")
+    model.save_state_dict(f"{path}/state_dict.pth")
+    model.save(f"{path}/model.pth")
 
 
-# Main function call
 if __name__ == "__main__":
     main()
