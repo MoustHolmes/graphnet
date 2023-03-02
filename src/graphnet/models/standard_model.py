@@ -40,7 +40,7 @@ class StandardModel(Model):
     ) -> None:
         """Construct `StandardModel`."""
         # Base class constructor
-        super().__init__()
+        super().__init__(name=__name__, class_name=self.__class__.__name__)
 
         # Check(s)
         if isinstance(tasks, Task):
@@ -162,7 +162,16 @@ class StandardModel(Model):
                 task.train_eval()
         return self
 
-    def predict(self, dataloader: DataLoader) -> List[Tensor]:
+    def predict(
+        self,
+        dataloader: DataLoader,
+        gpus: Optional[Union[List[int], int]] = None,
+        distribution_strategy: Optional[str] = None,
+    ) -> List[Tensor]:
         """Return predictions for `dataloader`."""
         self.inference()
-        return super().predict(dataloader)
+        return super().predict(
+            dataloader=dataloader,
+            gpus=gpus,
+            distribution_strategy=distribution_strategy,
+        )

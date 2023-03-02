@@ -19,9 +19,7 @@ from graphnet.training.callbacks import ProgressBar, PiecewiseLinearLR
 from graphnet.training.loss_functions import LogCoshLoss
 from graphnet.training.utils import make_train_validation_dataloader
 from graphnet.utilities.argparse import ArgumentParser
-from graphnet.utilities.logging import get_logger
-
-logger = get_logger()
+from graphnet.utilities.logging import Logger
 
 # Constants
 features = FEATURES.PROMETHEUS
@@ -30,14 +28,6 @@ truth = TRUTH.PROMETHEUS
 # Make sure W&B output directory exists
 WANDB_DIR = "./wandb/"
 os.makedirs(WANDB_DIR, exist_ok=True)
-
-# Initialise Weights & Biases (W&B) run
-wandb_logger = WandbLogger(
-    project="example-script",
-    entity="graphnet-team",
-    save_dir=WANDB_DIR,
-    log_model=True,
-)
 
 
 def main(
@@ -52,6 +42,17 @@ def main(
     num_workers: int,
 ) -> None:
     """Run example."""
+    # Construct Logger
+    logger = Logger()
+
+    # Initialise Weights & Biases (W&B) run
+    wandb_logger = WandbLogger(
+        project="example-script",
+        entity="graphnet-team",
+        save_dir=WANDB_DIR,
+        log_model=True,
+    )
+
     logger.info(f"features: {features}")
     logger.info(f"truth: {truth}")
 

@@ -15,9 +15,16 @@ from graphnet.data.dataset import Dataset
 from graphnet.data.sqlite import SQLiteDataset
 from graphnet.data.parquet import ParquetDataset
 from graphnet.models import Model
-from graphnet.utilities.logging import get_logger
+from graphnet.utilities.logging import Logger
 
-logger = get_logger()
+
+def collate_fn(graphs: List[Data]) -> Batch:
+    """Remove graphs with less than two DOM hits.
+
+    Should not occur in "production.
+    """
+    graphs = [g for g in graphs if g.n_pulses > 1]
+    return Batch.from_data_list(graphs)
 
 
 # @TODO: Remove in favour of DataLoader{,.from_dataset_config}
@@ -65,14 +72,6 @@ def make_dataloader(
     if isinstance(labels, dict):
         for label in labels.keys():
             dataset.add_label(key=label, fn=labels[label])
-
-    def collate_fn(graphs: List[Data]) -> Batch:
-        """Remove graphs with less than two DOM hits.
-
-        Should not occur in "production.
-        """
-        graphs = [g for g in graphs if g.n_pulses > 1]
-        return Batch.from_data_list(graphs)
 
     dataloader = DataLoader(
         dataset,
@@ -273,4 +272,4 @@ def save_results(
     results.to_csv(path + "/results.csv")
     model.save_state_dict(path + "/" + tag + "_state_dict.pth")
     model.save(path + "/" + tag + "_model.pth")
-    logger.info("Results saved at: \n %s" % path)
+    Logger().info("Results saved at: \n %s" % path)

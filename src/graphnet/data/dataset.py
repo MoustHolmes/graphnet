@@ -1,9 +1,20 @@
-"""Base `Dataset` class(es) used in GraphNeT."""
+"""Base :py:class:`Dataset` class(es) used in GraphNeT."""
 
 from copy import deepcopy
 from abc import ABC, abstractmethod
-from typing import cast, Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import (
+    cast,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Union,
+    Iterable,
+)
 
+from tqdm import tqdm
 import numpy as np
 import torch
 from torch.utils.data import ConcatDataset
@@ -15,7 +26,7 @@ from graphnet.utilities.config import (
     DatasetConfig,
     save_dataset_config,
 )
-from graphnet.utilities.logging import LoggerMixin
+from graphnet.utilities.logging import Logger
 from graphnet.data.utilities.string_selection_resolver import (
     StringSelectionResolver,
 )
@@ -25,7 +36,7 @@ class ColumnMissingException(Exception):
     """Exception to indicate a missing column in a dataset."""
 
 
-class Dataset(torch.utils.data.Dataset, Configurable, LoggerMixin, ABC):
+class Dataset(Logger, Configurable, torch.utils.data.Dataset, ABC):
     """Base Dataset class for reading from any intermediate file format."""
 
     # Class method(s)
@@ -254,6 +265,9 @@ class Dataset(torch.utils.data.Dataset, Configurable, LoggerMixin, ABC):
             seed=seed,
         )
 
+        # Base class constructor
+        super().__init__(name=__name__, class_name=self.__class__.__name__)
+
         # Implementation-specific initialisation.
         self._init()
 
@@ -274,9 +288,6 @@ class Dataset(torch.utils.data.Dataset, Configurable, LoggerMixin, ABC):
 
         # Implementation-specific post-init code.
         self._post_init()
-
-        # Base class constructor
-        super().__init__()
 
     # Properties
     @property
@@ -594,6 +605,9 @@ class Dataset(torch.utils.data.Dataset, Configurable, LoggerMixin, ABC):
         # Add custom labels to the graph
         for key, fn in self._label_fns.items():
             graph[key] = fn(graph)
+
+        # Add Dataset Path. Useful if multiple datasets are concatenated.
+        graph["dataset_path"] = self._path
         return graph
 
     def _get_labels(self, truth_dict: Dict[str, Any]) -> Dict[str, Any]:
@@ -642,3 +656,15 @@ class Dataset(torch.utils.data.Dataset, Configurable, LoggerMixin, ABC):
             return label
         except KeyError:
             return -1
+
+
+class EnsembleDataset(torch.utils.data.ConcatDataset):
+    """Construct a single dataset from a collection of datasets."""
+
+    def __init__(self, datasets: Iterable[Dataset]) -> None:
+        """Construct a single dataset from a collection of datasets.
+
+        Args:
+            datasets: A collection of Datasets
+        """
+        super().__init__(datasets=datasets)
