@@ -14,22 +14,21 @@ from typing import (
     Iterable,
 )
 
-from tqdm import tqdm
 import numpy as np
 import torch
-from torch.utils.data import ConcatDataset
 from torch_geometric.data import Data
 
 from graphnet.constants import GRAPHNET_ROOT_DIR
+from graphnet.data.utilities.string_selection_resolver import (
+    StringSelectionResolver,
+)
+from graphnet.training.labels import Label
 from graphnet.utilities.config import (
     Configurable,
     DatasetConfig,
     save_dataset_config,
 )
 from graphnet.utilities.logging import Logger
-from graphnet.data.utilities.string_selection_resolver import (
-    StringSelectionResolver,
-)
 
 
 class ColumnMissingException(Exception):
@@ -46,9 +45,9 @@ class Dataset(Logger, Configurable, torch.utils.data.Dataset, ABC):
         source: Union[DatasetConfig, str],
     ) -> Union[
         "Dataset",
-        ConcatDataset,
+        "EnsembleDataset",
         Dict[str, "Dataset"],
-        Dict[str, ConcatDataset],
+        Dict[str, "EnsembleDataset"],
     ]:
         """Construct `Dataset` instance from `source` configuration."""
         if isinstance(source, str):
@@ -75,9 +74,9 @@ class Dataset(Logger, Configurable, torch.utils.data.Dataset, ABC):
     def concatenate(
         cls,
         datasets: List["Dataset"],
-    ) -> ConcatDataset:
+    ) -> "EnsembleDataset":
         """Concatenate multiple `Dataset`s into one instance."""
-        return ConcatDataset(datasets)
+        return EnsembleDataset(datasets)
 
     @classmethod
     def _construct_datasets_from_dict(
@@ -90,7 +89,7 @@ class Dataset(Logger, Configurable, torch.utils.data.Dataset, ABC):
         for key, selection in selections.items():
             config.selection = selection
             dataset = Dataset.from_config(config)
-            assert isinstance(dataset, (Dataset, ConcatDataset))
+            assert isinstance(dataset, (Dataset, EnsembleDataset))
             datasets[key] = dataset
 
         # Reset `selections`.
@@ -349,8 +348,15 @@ class Dataset(Logger, Configurable, torch.utils.data.Dataset, ABC):
         """
 
     # Public method(s)
-    def add_label(self, key: str, fn: Callable[[Data], Any]) -> None:
+    def add_label(
+        self, fn: Callable[[Data], Any], key: Optional[str] = None
+    ) -> None:
         """Add custom graph label define using function `fn`."""
+        if isinstance(fn, Label):
+            key = fn.key
+        assert isinstance(
+            key, str
+        ), "Please specify a key for the custom label to be added."
         assert (
             key not in self._label_fns
         ), f"A custom label {key} has already been defined."
