@@ -93,6 +93,22 @@ class EnergyReconstruction(Task):
         return torch.nn.functional.softplus(x, beta=0.05) + eps_like(x)
 
 
+class EnergyReconstructionCapped(Task):
+    """Reconstructs energy using stable method."""
+
+    # Requires one feature: untransformed energy
+    nb_inputs = 1
+
+    def _forward(self, x: Tensor) -> Tensor:
+        # Transform to positive energy domain avoiding `-inf` in `log10`
+        # Transform, thereby preventing overflow and underflow error.
+        print("x")
+        print(x[:10, 0])
+        print("out")
+        # print(torch.nn.functional.sigmoid(x) * 5)
+        return torch.nn.functional.sigmoid(x) * 5
+
+
 class EnergyReconstructionWithPower(Task):
     """Reconstructs energy."""
 
@@ -101,10 +117,13 @@ class EnergyReconstructionWithPower(Task):
 
     def _forward(self, x: Tensor) -> Tensor:
         # Transform energy
+        print("x")
+        print(x[:10, 0])
+        print(torch.pow(10, x[:, 0] + 1.0).unsqueeze(1)[:10])
         return torch.pow(10, x[:, 0] + 1.0).unsqueeze(1)
 
 
-class EnergyReconstructionWithUncertainty(EnergyReconstruction):
+class EnergyReconstructionWithUncertainty(EnergyReconstructionCapped):
     """Reconstructs energy and associated uncertainty (log(var))."""
 
     # Requires one feature in addition to `EnergyReconstruction`: log-variance (uncertainty).
@@ -113,8 +132,15 @@ class EnergyReconstructionWithUncertainty(EnergyReconstruction):
     def _forward(self, x: Tensor) -> Tensor:
         # Transform energy
         energy = super()._forward(x[:, :1]).squeeze(1)
+        print("energy")
+        print(energy[:10])
+
         log_var = x[:, 1]
+        print("log_var")
+        print(log_var[:10])
         pred = torch.stack((energy, log_var), dim=1)
+        print("pred")
+        print(pred[:10])
         return pred
 
 
@@ -125,7 +151,6 @@ class VertexReconstruction(Task):
     nb_inputs = 4
 
     def _forward(self, x: Tensor) -> Tensor:
-
         # Scale xyz to roughly the right order of magnitude, leave time
         x[:, 0] = x[:, 0] * 1e2
         x[:, 1] = x[:, 1] * 1e2
@@ -141,7 +166,6 @@ class PositionReconstruction(Task):
     nb_inputs = 3
 
     def _forward(self, x: Tensor) -> Tensor:
-
         # Scale to roughly the right order of magnitude
         x[:, 0] = x[:, 0] * 1e2
         x[:, 1] = x[:, 1] * 1e2
@@ -157,7 +181,6 @@ class TimeReconstruction(Task):
     nb_inputs = 1
 
     def _forward(self, x: Tensor) -> Tensor:
-
         # Leave as it is
         return x
 
@@ -185,3 +208,67 @@ class EnergyEnergy_trackCombined(Task):
     def _forward(self, x: Tensor) -> Tensor:
         # Transform output to unit range
         return torch.sigmoid(x)
+
+
+class EnergyEnergy_trackInelasticity(Task):
+    """reconstructs inelasticity energy and energy_track in a range(0,1)."""
+
+    # Requires 2 features energy and energy_track outputed in the range 0,1.
+    nb_inputs = 3
+
+    def _forward(self, x: Tensor) -> Tensor:
+        # Transform output to unit range
+
+        return torch.sigmoid(x)
+
+
+class Inelasticity_With_Energy_Energy_track_Guides_Task(Task):
+    """reconstructs inelasticity with energy and energy_track as guides."""
+
+    # Requires 2 features energy and energy_track outputed in the range 0,1.
+    nb_inputs = 2
+
+    def _forward(self, x: Tensor) -> Tensor:
+        # Transform output to unit range
+
+        x = torch.nn.functional.softplus(x, beta=0.05) + eps_like(x)
+
+        x = torch.cat(
+            (x, torch.pow(10, torch.unsqueeze(1 - x[:, 1] / x[:, 0], 1))),
+            dim=1,
+        )
+        return x
+
+
+class InelasticityLogErrorReconstruction(InelasticityReconstruction):
+    """Reconstructs interaction inelasticity.
+
+    That is, tracks vs. hadronic energy.
+    """
+
+    # Requires one features: inelasticity itself
+    nb_inputs = 2
+
+    def _forward(self, x: Tensor) -> Tensor:
+        # Transform energy
+        inelasticity = torch.sigmoid(super()._forward(x[:, :1]).squeeze(1))
+        log_var = x[:, 1]
+        pred = torch.stack((inelasticity, log_var), dim=1)
+        return pred
+
+
+# class EnergyLogErrorReconstruction(ener):
+#     """Reconstructs interaction inelasticity.
+
+#     That is, tracks vs. hadronic energy.
+#     """
+
+#     # Requires one features: inelasticity itself
+#     nb_inputs = 2
+
+#     def _forward(self, x: Tensor) -> Tensor:
+#         # Transform energy
+#         inelasticity = torch.sigmoid(super()._forward(x[:, :1]).squeeze(1))
+#         log_var = x[:, 1]
+#         pred = torch.stack((inelasticity, log_var), dim=1)
+#         return pred

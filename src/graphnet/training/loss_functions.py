@@ -22,6 +22,7 @@ from torch.nn.functional import (
 from graphnet.utilities.config import save_model_config
 from graphnet.models.model import Model
 from graphnet.utilities.decorators import final
+from graphnet.utilities.maths import eps_like
 
 
 class LossFunction(Model):
@@ -446,3 +447,34 @@ class VonMisesFisher3DLoss(VonMisesFisherLoss):
         kappa = prediction[:, 3]
         p = kappa.unsqueeze(1) * prediction[:, [0, 1, 2]]
         return self._evaluate(p, target)
+
+
+class VarianceAttenuationLoss(LossFunction):
+    """Variance Attenuation Loss in one dimensions."""
+
+    def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
+        """MSE but with estimated errors on predictions.
+
+        Args:
+            prediction: Output of the model. Must have shape [N, 3]
+            target: Target tensor, extracted from graph object.
+
+        Returns:
+            Variance Attenuation loss terms. Shape [N,]
+        """
+        mu = prediction[:, 0]  # first output neuron
+        print("mu")
+        print(mu[:10])
+        print("target")
+        print(target[:10])
+
+        log_sig = prediction[:, 1]  # second output neuron
+        sig = torch.exp(log_sig)  # undo the log
+        print("sig")
+        print(sig[:10])
+        loss = (
+            2 * log_sig + ((target - mu) / (sig + eps_like(target))) ** 2
+        )  # torch.mean(2*log_sig + ((target-mu)/sig)**2)
+        print("loss")
+        print(loss[:10])
+        return loss  # 2*log_sig + ((target-mu)/sig)**2 # torch.mean(2*log_sig + ((target-mu)/sig)**2)
