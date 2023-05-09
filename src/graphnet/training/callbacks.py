@@ -78,7 +78,20 @@ class ProgressBar(TQDMProgressBar):
     Customises the default progress in pytorch-lightning.
     """
 
+    def __init__(self) -> None:
+        """Initialize custom ProgressBar."""
+        super().__init__()
+        self.main_progress_bar = None
+
     def _common_config(self, bar: Bar) -> Bar:
+        """Apply common configurations to the progress bar.
+
+        Args:
+            bar (Bar): The progress bar to configure.
+
+        Returns:
+            Bar: The configured progress bar.
+        """
         bar.unit = " batch(es)"
         bar.colour = "green"
         return bar
@@ -87,24 +100,28 @@ class ProgressBar(TQDMProgressBar):
         """Override for customisation."""
         bar = super().init_validation_tqdm()
         bar = self._common_config(bar)
+        self.main_progress_bar = bar
         return bar
 
     def init_predict_tqdm(self) -> Bar:
         """Override for customisation."""
         bar = super().init_predict_tqdm()
         bar = self._common_config(bar)
+        self.main_progress_bar = bar
         return bar
 
     def init_test_tqdm(self) -> Bar:
         """Override for customisation."""
         bar = super().init_test_tqdm()
         bar = self._common_config(bar)
+        self.main_progress_bar = bar
         return bar
 
     def init_train_tqdm(self) -> Bar:
         """Override for customisation."""
         bar = super().init_train_tqdm()
         bar = self._common_config(bar)
+        self.main_progress_bar = bar
         return bar
 
     def get_metrics(self, trainer: Trainer, model: LightningModule) -> Dict:
@@ -122,15 +139,16 @@ class ProgressBar(TQDMProgressBar):
         while the current is training. The default behaviour in pytorch-
         lightning is to overwrite the progress bar from previous epochs.
         """
-        if trainer.current_epoch > 0:
+        if trainer.current_epoch > 0 and self.main_progress_bar is not None:
             self.main_progress_bar.set_postfix(
                 self.get_metrics(trainer, model)
             )
             print("")
         super().on_train_epoch_start(trainer, model)
-        self.main_progress_bar.set_description(
-            f"Epoch {trainer.current_epoch:2d}"
-        )
+        if self.main_progress_bar is not None:
+            self.main_progress_bar.set_description(
+                f"Epoch {trainer.current_epoch:2d}"
+            )
 
     def on_train_epoch_end(
         self, trainer: Trainer, model: LightningModule
@@ -150,5 +168,6 @@ class ProgressBar(TQDMProgressBar):
             assert isinstance(h, logging.StreamHandler)
             level = h.level
             h.setLevel(logging.ERROR)
-            logger.info(str(super().main_progress_bar))
+            if self.main_progress_bar is not None:
+                logger.info(str(self.main_progress_bar))
             h.setLevel(level)

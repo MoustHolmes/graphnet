@@ -41,7 +41,6 @@ class Model(Logger, Configurable, LightningModule, ABC):
         distribution_strategy: Optional[str] = "ddp",
         **trainer_kwargs: Any,
     ) -> None:
-
         if gpus:
             accelerator = "gpu"
             devices = gpus
@@ -70,7 +69,7 @@ class Model(Logger, Configurable, LightningModule, ABC):
             devices=inference_devices,
             callbacks=callbacks,
             logger=logger,
-            strategy=None,
+            strategy="auto",
             **trainer_kwargs,
         )
 
@@ -157,7 +156,7 @@ class Model(Logger, Configurable, LightningModule, ABC):
         self,
         dataloader: DataLoader,
         gpus: Optional[Union[List[int], int]] = None,
-        distribution_strategy: Optional[str] = None,
+        distribution_strategy: Optional[str] = "auto",
     ) -> List[Tensor]:
         """Return predictions for `dataloader`.
 
@@ -195,7 +194,7 @@ class Model(Logger, Configurable, LightningModule, ABC):
         additional_attributes: Optional[List[str]] = None,
         index_column: str = "event_no",
         gpus: Optional[Union[List[int], int]] = None,
-        distribution_strategy: Optional[str] = None,
+        distribution_strategy: Optional[str] = "auto",
     ) -> pd.DataFrame:
         """Return predictions for `dataloader` as a DataFrame.
 
@@ -272,7 +271,7 @@ class Model(Logger, Configurable, LightningModule, ABC):
         dirname = os.path.dirname(path)
         if dirname:
             os.makedirs(dirname, exist_ok=True)
-        torch.save(self.cpu(), path, pickle_module=dill)
+        # torch.save(self.cpu(), path, pickle_module=dill)
         self.info(f"Model saved to {path}")
 
     @classmethod
