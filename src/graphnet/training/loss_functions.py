@@ -449,32 +449,32 @@ class VonMisesFisher3DLoss(VonMisesFisherLoss):
         return self._evaluate(p, target)
 
 
-class VarianceAttenuationLoss(LossFunction):
-    """Variance Attenuation Loss in one dimensions."""
+class BetaLoss(LossFunction):
+    """Beta loss function for a scalar in the range [0, 1]."""
 
     def _forward(self, prediction: Tensor, target: Tensor) -> Tensor:
-        """MSE but with estimated errors on predictions.
+        """Calculate loss as minus log prob. for pred. and target tensors.
 
         Args:
-            prediction: Output of the model. Must have shape [N, 3]
-            target: Target tensor, extracted from graph object.
+            prediction (Tensor): A tensor containing the predicted alpha and beta
+                parameters of the Beta distribution.
+            target (Tensor): A tensor containing the true values.
 
         Returns:
-            Variance Attenuation loss terms. Shape [N,]
+            Tensor: The calculated beta loss.
         """
-        mu = prediction[:, 0]  # first output neuron
-        print("mu")
-        print(mu[:10])
-        print("target")
-        print(target[:10])
+        shrink = 0.000001  # To avoid NaNs
+        target = target * (1 - 2 * shrink) + shrink / 2
 
-        log_sig = prediction[:, 1]  # second output neuron
-        sig = torch.exp(log_sig)  # undo the log
-        print("sig")
-        print(sig[:10])
-        loss = (
-            2 * log_sig + ((target - mu) / (sig + eps_like(target))) ** 2
-        )  # torch.mean(2*log_sig + ((target-mu)/sig)**2)
-        print("loss")
-        print(loss[:10])
-        return loss  # 2*log_sig + ((target-mu)/sig)**2 # torch.mean(2*log_sig + ((target-mu)/sig)**2)
+        # Get alpha and beta parameters
+        alpha = prediction[:, 0]
+        beta = prediction[:, 1]
+
+        # Create a Beta distribution with the predicted alpha and beta parameters
+        beta_dist = torch.distributions.Beta(alpha, beta)
+
+        # Calculate the log probability of the truth value
+        log_prob = beta_dist.log_prob(target.squeeze(1))
+
+        # Return the negative log probability
+        return -log_prob
