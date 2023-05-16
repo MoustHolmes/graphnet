@@ -6,7 +6,6 @@ from torch import Tensor, LongTensor
 from torch_geometric.data import Data
 from torch_scatter import scatter_max, scatter_mean, scatter_min, scatter_sum
 
-
 from graphnet.models.components.layers import DynEdgeConv
 from graphnet.utilities.config import save_model_config
 from graphnet.models.gnn.gnn import GNN
