@@ -4,13 +4,8 @@ from typing import List, Optional, Sequence, Tuple, Union
 import torch
 from torch import Tensor, LongTensor
 from torch_geometric.data import Data
-from torch_scatter import (
-    scatter_max,
-    scatter_mean,
-    scatter_min,
-    scatter_sum,
-    scatter_std,
-)
+from torch_scatter import scatter_max, scatter_mean, scatter_min, scatter_sum
+
 
 from graphnet.models.components.layers import DynEdgeConv
 from graphnet.utilities.config import save_model_config
@@ -22,7 +17,6 @@ GLOBAL_POOLINGS = {
     "max": scatter_max,
     "sum": scatter_sum,
     "mean": scatter_mean,
-    "std": scatter_std,
 }
 
 
